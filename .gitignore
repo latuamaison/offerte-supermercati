@@ -1,0 +1,25 @@
+# File temporanei Python
+__pycache__/
+*.pyc
+*.pyo
+
+# File JSON temporanei
+*.json
+
+# File di dati/database
+*.db
+*.sqlite
+
+# File di log
+*.log
+
+# File di sistema
+.DS_Store
+Thumbs.db
+
+# File specifici Windows
+chromedriver.exe
+cacert.pem
+
+# File di test
+test_*.php

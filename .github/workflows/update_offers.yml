@@ -1,0 +1,64 @@
+name: Aggiorna Offerte Eurospin
+
+on:
+  schedule:
+    # Esegui ogni 4 ore (sintassi cron: minuto ora giorno mese giorno_settimana)
+    - cron: '0 */4 * * *'
+  workflow_dispatch:  # Permette esecuzione manuale
+
+jobs:
+  update-offers:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout codice
+      uses: actions/checkout@v4
+      
+    - name: Configura Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        
+    - name: Installa dipendenze Python
+      run: |
+        pip install -r requirements.txt
+        
+    - name: Installa Chrome e ChromeDriver
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y wget unzip
+        # Installa Chrome
+        wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
+        echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list
+        sudo apt-get update
+        sudo apt-get install -y google-chrome-stable
+        # Verifica versione Chrome
+        google-chrome --version
+        
+    - name: Configura PHP
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y php php-curl
+        
+    - name: Esegui script di aggiornamento
+      env:
+        FIREBASE_URL: 'https://offerte-spesa-default-rtdb.europe-west1.firebasedatabase.app/promozioni/eurospin.json'
+      run: |
+        # Mostra info ambiente
+        python --version
+        php --version
+        
+        # Esegui lo script PHP (che a sua volta esegue Python)
+        php trigger_eurospin.php
+        
+    - name: Invia notifica se fallisce
+      if: failure()
+      uses: actions/github-script@v7
+      with:
+        script: |
+          github.rest.issues.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title: '⚠️ Aggiornamento offerte Eurospin fallito',
+            body: 'Il workflow di aggiornamento automatico delle offerte Eurospin è fallito. Controlla i log per dettagli.'
+          })

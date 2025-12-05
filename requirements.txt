@@ -1,39 +1,8 @@
-# ===========================================
-# EUROSPIN OFFERTE SCRAPER - DEPENDENCIES
-# ===========================================
-# Versioni FISSE per garantire compatibilità
-# Non usare >= che può installare versioni non testate
-
-# Core: Automazione browser e web scraping
-selenium==4.15.2            # Versione STABLE testata con Chrome 119+
-webdriver-manager==4.0.1    # Gestione automatica ChromeDriver
-
-# HTTP requests e parsing HTML
-requests==2.31.0            # HTTP client
-beautifulsoup4==4.12.2      # Parsing HTML
-lxml==4.9.3                 # Parser HTML veloce (necessario per BS4)
-
-# Utility e gestione ambienti
-python-dotenv==1.0.0        # Gestione variabili d'ambiente
-urllib3==2.0.7              # HTTP client sottostante
-certifi==2023.7.22          # Certificati SSL
-
-# Gestione dati e JSON
-pytz==2023.3                # Timezone per timestamp
-tzlocal==5.0.1              # Timezone locale
-
-# ===========================================
-# VERSIONI SPECIFICHE PER:
-# ===========================================
-# - Ubuntu 22.04 (GitHub Actions)
-# - Chrome 119+
-# - Python 3.11
-# - Firefox headless compatibility
-# - Selenium 4.15.x (API stabili)
-
-# ===========================================
-# NOTA: Non aggiornare senza testare!
-# ===========================================
-# Selenium 4.16+ ha cambiamenti API breaking
-# Chrome 120+ richiede ChromeDriver specifico
-# Ubuntu 22.04 ha librerie di sistema specifiche
+selenium==4.15.2
+webdriver-manager==4.0.1
+requests==2.31.0
+beautifulsoup4==4.12.2
+lxml==4.9.3
+python-dotenv==1.0.0
+urllib3==2.0.7
+certifi==2023.7.22

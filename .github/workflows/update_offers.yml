@@ -2,161 +2,44 @@ name: Aggiorna Offerte Eurospin
 
 on:
   schedule:
-    # Esegui ogni 4 ore (UTC): 00:00, 04:00, 08:00, 12:00, 16:00, 20:00
-    - cron: '0 */4 * * *'
-  workflow_dispatch:        # Permette esecuzione manuale da GitHub UI
-  push:
-    branches: [ main ]      # Esegui anche quando push su main
+    - cron: '0 */4 * * *'  # Ogni 4 ore
+  workflow_dispatch:        # Esecuzione manuale
 
 jobs:
   update-offers:
-    runs-on: ubuntu-latest  # Ubuntu 22.04 LTS
-    
-    # Timeout per evitare workflow infiniti
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     
     steps:
-    # ===========================================
-    # STEP 1: PREPARAZIONE REPOSITORY
-    # ===========================================
-    - name: Checkout codice sorgente
+    - name: Checkout repository
       uses: actions/checkout@v4
-      with:
-        fetch-depth: 1      # Ottimizza velocità download
     
-    # ===========================================
-    # STEP 2: CONFIGURAZIONE PYTHON
-    # ===========================================
-    - name: Configura Python 3.11
+    - name: Setup Python 3.11
       uses: actions/setup-python@v5
       with:
         python-version: '3.11'
-        cache: 'pip'        # Cache per dipendenze Python
     
-    # ===========================================
-    # STEP 3: INSTALLAZIONE DIPENDENZE PYTHON
-    # ===========================================
-    - name: Installa dipendenze Python
+    - name: Install Python dependencies
       run: |
-        python -m pip install --upgrade pip setuptools wheel
-        pip install selenium==4.15.2
-        pip install webdriver-manager==4.0.1
-        pip install requests==2.31.0
-        pip install beautifulsoup4==4.12.2
-        pip install lxml==4.9.3
-        pip install python-dotenv==1.0.0
+        pip install selenium webdriver-manager requests beautifulsoup4 lxml
     
-    # ===========================================
-    # STEP 4: INSTALLAZIONE CHROME E CHROMEDRIVER
-    # ===========================================
-    - name: Installa Chrome e dipendenze
+    - name: Install Chrome
       run: |
         sudo apt-get update
-        sudo apt-get install -y \
-          wget \
-          unzip \
-          xvfb \
-          libxss1 \
-          libappindicator3-1 \
-          libindicator7 \
-          fonts-liberation \
-          libasound2 \
-          libnspr4 \
-          libnss3 \
-          libx11-xcb1 \
-          libxcomposite1 \
-          libxcursor1 \
-          libxdamage1 \
-          libxi6 \
-          libxtst6 \
-          xdg-utils
-        
-        # Installa Google Chrome Stable
+        sudo apt-get install -y wget
         wget -q -O /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
         sudo apt-get install -y /tmp/chrome.deb
-        rm /tmp/chrome.deb
-        
-        # Verifica versione Chrome
-        echo "📊 Chrome installato:"
         google-chrome --version
     
-    # ===========================================
-    # STEP 5: CONFIGURAZIONE PHP
-    # ===========================================
-    - name: Installa PHP e estensioni necessarie
+    - name: Install PHP
       run: |
         sudo apt-get update
-        sudo apt-get install -y \
-          php8.1 \
-          php8.1-curl \
-          php8.1-json \
-          php8.1-mbstring \
-          php8.1-xml
-        
-        # Verifica installazione PHP
-        echo "📊 PHP installato:"
-        php --version
-        php -m | grep -E "(curl|json)"
+        sudo apt-get install -y php php-curl
     
-    # ===========================================
-    # STEP 6: ESECUZIONE SCRIPT PRINCIPALE
-    # ===========================================
-    - name: Esegui aggiornamento offerte Eurospin
+    - name: Run Eurospin Update
       env:
-        # VARIABILE D'AMBIENTE CRITICA - USA IL SEGRETO GITHUB
         FIREBASE_SECRET: ${{ secrets.FIREBASE_SECRET }}
-        PYTHONUNBUFFERED: 1
-        DISPLAY: :99
       run: |
-        echo "🚀 Avvio aggiornamento offerte Eurospin"
-        echo "========================================"
-        
-        # Avvia X virtual framebuffer (per Chrome headless)
-        Xvfb :99 -screen 0 1920x1080x24 &
-        export DISPLAY=:99
-        
-        # Esegui lo script PHP principale
+        echo "🚀 Starting Eurospin update..."
         php trigger_eurospin.php
-        
-        echo "========================================"
-        echo "✅ Aggiornamento completato"
-    
-    # ===========================================
-    # STEP 7: NOTIFICA IN CASO DI FALLIMENTO
-    # ===========================================
-    - name: Notifica fallimento e crea issue
-      if: failure()
-      uses: actions/github-script@v7
-      with:
-        script: |
-          const { owner, repo } = context.repo;
-          const runId = context.runId;
-          const runUrl = `https://github.com/${owner}/${repo}/actions/runs/${runId}`;
-          
-          try {
-            await github.rest.issues.create({
-              owner,
-              repo,
-              title: '⚠️ Aggiornamento offerte Eurospin fallito',
-              body: `Il workflow di aggiornamento automatico delle offerte Eurospin è fallito.
-              
-              **Dettagli:**
-              - Workflow Run: ${runUrl}
-              - Repository: ${owner}/${repo}
-              - Data: ${new Date().toISOString()}
-              
-              **Azioni richieste:**
-              1. Controlla i log del workflow per vedere l'errore specifico
-              2. Verifica che il Database Secret di Firebase sia configurato correttamente
-              3. Controlla che il sito Eurospin sia accessibile
-              4. Verifica le dipendenze Python e Chrome
-              
-              **Configurazione segreti GitHub:**
-              Assicurati che il segreto \`FIREBASE_SECRET\` sia configurato in:
-              Settings → Secrets and variables → Actions → Repository secrets`,
-              labels: ['bug', 'automation', 'eurospin']
-            });
-            console.log('✅ Issue creata per il fallimento');
-          } catch (error) {
-            console.error('❌ Errore nella creazione issue:', error);
-          }
+        echo "✅ Update completed!"

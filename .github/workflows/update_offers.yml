@@ -2,7 +2,7 @@ name: Aggiorna Offerte Eurospin
 
 on:
   schedule:
-    - cron: '0 */4 * * *'  # Ogni 4 ore
+    - cron: '0 */4 * * *'  # Ogni 4 ore: 00:00, 04:00, 08:00, 12:00, 16:00, 20:00 UTC
   workflow_dispatch:        # Esecuzione manuale
 
 jobs:
@@ -21,25 +21,31 @@ jobs:
     
     - name: Install Python dependencies
       run: |
-        pip install selenium webdriver-manager requests beautifulsoup4 lxml
+        pip install selenium==4.15.2
+        pip install webdriver-manager==4.0.1
+        pip install requests==2.31.0
+        pip install beautifulsoup4==4.12.2
+        pip install lxml==4.9.3
     
-    - name: Install Chrome
+    - name: Install Chrome for Selenium
       run: |
         sudo apt-get update
         sudo apt-get install -y wget
         wget -q -O /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
         sudo apt-get install -y /tmp/chrome.deb
+        echo "Chrome version:"
         google-chrome --version
     
-    - name: Install PHP
+    - name: Install PHP and cURL
       run: |
         sudo apt-get update
         sudo apt-get install -y php php-curl
+        echo "PHP version:"
+        php --version
     
-    - name: Run Eurospin Update
+    - name: Run Eurospin Update Script
       env:
         FIREBASE_SECRET: ${{ secrets.FIREBASE_SECRET }}
       run: |
-        echo "🚀 Starting Eurospin update..."
+        echo "🚀 Starting Eurospin update automation..."
         php trigger_eurospin.php
-        echo "✅ Update completed!"

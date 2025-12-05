@@ -3,24 +3,71 @@
 header('Content-Type: text/plain; charset=utf-8');
 echo "=== AGGIORNAMENTO PROMOZIONI EUROSPIN ===\n";
 
-// CONFIGURAZIONE - MODIFICA 2: PERCORSI RELATIVI
-$cartella_progetto = __DIR__;  // Usa automaticamente la cartella dello script
+// CONFIGURAZIONE SICURA
+$cartella_progetto = __DIR__;
 $script_python = $cartella_progetto . '/estrai_eurospin.py';
-$url_firebase = 'https://offerte-spesa-default-rtdb.europe-west1.firebasedatabase.app/promozioni/eurospin.json';
+
+// ============================================================================
+// 1. OTTENIMENTO DEL DATABASE SECRET DI FIREBASE
+// ============================================================================
+
+$chiave_segreta = getenv('FIREBASE_SECRET');
+
+// Se stiamo testando LOCALMENTE: usa file firebase_secret.txt
+if (empty($chiave_segreta)) {
+    $secret_file = __DIR__ . '/firebase_secret.txt';
+    
+    if (file_exists($secret_file)) {
+        $chiave_segreta = trim(file_get_contents($secret_file));
+        echo "ℹ️  MODALITÀ LOCALE: usando Database Secret da file\n";
+    } else {
+        echo "❌ ERRORE: firebase_secret.txt non trovato localmente\n";
+        echo "   Per test locale, crea il file con il tuo Database Secret\n";
+        exit(1);
+    }
+}
+
+// Controllo finale che la chiave esista
+if (empty($chiave_segreta)) {
+    echo "❌ ERRORE CRITICO: Database Secret non configurato!\n";
+    echo "   Su GitHub: imposta FIREBASE_SECRET in Settings > Secrets > Actions\n";
+    echo "   Localmente: crea file firebase_secret.txt con il Database Secret\n";
+    exit(1);
+}
+
+// ============================================================================
+// 2. COSTRUZIONE URL FIREBASE CON AUTENTICAZIONE
+// ============================================================================
+
+$url_firebase = 'https://offerte-spesa-default-rtdb.europe-west1.firebasedatabase.app/promozioni/eurospin.json?auth=' . urlencode($chiave_segreta);
 
 echo "Percorso: $cartella_progetto\n";
-echo "Firebase: $url_firebase\n\n";
+echo "Firebase: Database configurato correttamente\n";
+echo "Secret: " . substr($chiave_segreta, 0, 8) . "... (" . strlen($chiave_segreta) . " caratteri)\n\n";
 
-// 1. Vai nella cartella
+// ============================================================================
+// 3. ESEGUI SCRIPT PYTHON (CROSS-PLATFORM)
+// ============================================================================
+
 if (!chdir($cartella_progetto)) {
     echo "❌ ERRORE: Cartella non trovata\n";
     exit(1);
 }
 
-// 2. Esegui Python
 echo ">> [1] Esecuzione script Python...\n";
-// Se 'python' non funziona, cambia in 'py'
-$comando = 'python "' . $script_python . '" 2>&1';
+
+// Rileva sistema operativo per compatibilità Windows/Linux
+$sistema_operativo = strtoupper(PHP_OS_FAMILY);
+
+if ($sistema_operativo === 'WINDOWS' || $sistema_operativo === 'WINNT') {
+    // Windows: usa 'python' o 'py'
+    $comando = 'python "' . $script_python . '" 2>&1';
+    echo "   Sistema: Windows (usa 'python')\n";
+} else {
+    // Linux/macOS (GitHub Actions): usa 'python3'
+    $comando = 'python3 "' . $script_python . '" 2>&1';
+    echo "   Sistema: Linux/macOS (usa 'python3')\n";
+}
 
 exec($comando, $output, $return_code);
 
@@ -30,13 +77,23 @@ foreach ($output as $riga) {
 
 if ($return_code !== 0) {
     echo "\n❌ Python fallito (Codice: $return_code)\n";
-    echo "   Prova a cambiare 'python' in 'py' alla riga 24 e riesegui\n";
+    
+    // Diagnostica aggiuntiva
+    if ($sistema_operativo === 'WINDOWS' || $sistema_operativo === 'WINNT') {
+        echo "   Su Windows, prova a cambiare 'python' in 'py' e riesegui\n";
+    } else {
+        echo "   Su Linux, assicurati che python3 sia installato\n";
+    }
+    
     exit(1);
 }
 
 echo "\n✅ Python completato.\n";
 
-// 3. Cerca il JSON
+// ============================================================================
+// 4. VERIFICA FILE JSON
+// ============================================================================
+
 $file_json = $cartella_progetto . '/promozioni_eurospin.json';
 if (!file_exists($file_json)) {
     echo "❌ File JSON non creato\n";
@@ -45,32 +102,37 @@ if (!file_exists($file_json)) {
 
 echo "✅ JSON trovato.\n";
 
-// 4. Leggi JSON
 $contenuto_json = file_get_contents($file_json);
 if ($contenuto_json === false) {
     echo "❌ Errore lettura JSON\n";
     exit(1);
 }
 
-// 5. Invia a Firebase CON CONFIGURAZIONE SSL FLESSIBILE
+// ============================================================================
+// 5. INVIO A FIREBASE CON SSL INTELLIGENTE
+// ============================================================================
+
 echo "\n>> [2] Invio a Firebase...\n";
 
 $ch = curl_init($url_firebase);
 
-// MODIFICA 3: CONFIGURAZIONE SSL INTELLIGENTE
-curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true); // Verifica certificati SSL
-
-// Gestione intelligente del certificato CA
+// Configurazione SSL intelligente
 $ca_cert_path = __DIR__ . '/cacert.pem';
+
 if (file_exists($ca_cert_path)) {
     // Usa cacert.pem locale se esiste (per test locale)
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
     curl_setopt($ch, CURLOPT_CAINFO, $ca_cert_path);
-    echo "   Usando certificato locale: $ca_cert_path\n";
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+    echo "   ✅ Usando certificato SSL locale: cacert.pem\n";
 } else {
     // Su server (GitHub Actions) usa i certificati di sistema
-    echo "   Usando certificati di sistema\n";
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+    echo "   ℹ️  Usando certificati di sistema\n";
 }
 
+// Configurazione richiesta
 curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "PUT");
 curl_setopt($ch, CURLOPT_POSTFIELDS, $contenuto_json);
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -78,61 +140,92 @@ curl_setopt($ch, CURLOPT_HTTPHEADER, [
     'Content-Type: application/json',
     'Content-Length: ' . strlen($contenuto_json)
 ]);
-curl_setopt($ch, CURLOPT_TIMEOUT, 30); // Timeout di 30 secondi
+curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 15);
 
 $risposta = curl_exec($ch);
 $codice_http = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 $curl_errore = curl_error($ch);
 curl_close($ch);
 
+// ============================================================================
+// 6. ANALISI RISPOSTA
+// ============================================================================
+
 if ($codice_http === 200) {
     echo "✅ SUCCESSO! Firebase aggiornato.\n";
     
     // Statistiche
     $dati = json_decode($contenuto_json, true);
-    $categorie = count($dati);
-    $prodotti_totali = 0;
-    foreach ($dati as $categoria) {
-        $prodotti_totali += count($categoria['prodotti']);
+    if (is_array($dati)) {
+        $categorie = count($dati);
+        $prodotti_totali = 0;
+        foreach ($dati as $categoria) {
+            if (isset($categoria['prodotti']) && is_array($categoria['prodotti'])) {
+                $prodotti_totali += count($categoria['prodotti']);
+            }
+        }
+        echo "   📊 Statistiche: $categorie categorie, $prodotti_totali prodotti\n";
     }
-    echo "   📊 Statistiche: $categorie categorie, $prodotti_totali prodotti\n";
     echo "   📍 Percorso: promozioni/eurospin\n";
     
 } else {
     echo "❌ ERRORE nell'invio a Firebase.\n";
     echo "   Codice HTTP: $codice_http\n";
+    
     if ($curl_errore) {
         echo "   Errore cURL: $curl_errore\n";
     }
-    echo "   Risposta Firebase: " . ($risposta ?: "(vuota)") . "\n";
     
-    // Consigli per errori specifici
+    if ($risposta) {
+        echo "   Risposta Firebase: $risposta\n";
+    }
+    
+    // Diagnostica errori comuni
     if ($codice_http === 401) {
-        echo "\n🔐 SUGGERIMENTO: Errore 401 = permesso negato.\n";
-        echo "   Vai su Firebase Console > Realtime Database > Regole\n";
-        echo "   Assicurati che 'eurospin' abbia permessi di scrittura:\n";
-        echo "   {\n";
-        echo "     \"rules\": {\n";
-        echo "       \"promozioni\": {\n";
-        echo "         \"eurospin\": {\n";
-        echo "           \".read\": true,\n";
-        echo "           \".write\": true\n";
-        echo "         }\n";
-        echo "       }\n";
-        echo "     }\n";
-        echo "   }\n";
+        echo "\n🔐 ERRORE 401: Autenticazione fallita\n";
+        echo "   Controlla:\n";
+        echo "   1. Database Secret in firebase_secret.txt (locale) o FIREBASE_SECRET (GitHub)\n";
+        echo "   2. Regole Firebase: Imposta temporaneamente '.write': true\n";
+        echo "   3. URL Firebase: Controlla il percorso e il progetto\n";
+        
+    } elseif ($codice_http === 403) {
+        echo "\n🔒 ERRORE 403: Permessi negati\n";
+        echo "   MODIFICA LE REGOLE FIREBASE:\n";
+        echo "   1. Vai su Firebase Console > Database > Realtime Database > Rules\n";
+        echo "   2. Imposta temporaneamente:\n";
+        echo "      {\n";
+        echo "        \"rules\": {\n";
+        echo "          \".read\": true,\n";
+        echo "          \".write\": true\n";
+        echo "        }\n";
+        echo "      }\n";
+        echo "   3. Clicca 'Publish'\n";
+        echo "   4. Riavvia lo script\n";
+        
     } elseif ($codice_http === 0) {
-        echo "\n🌐 SUGGERIMENTO: Codice 0 = errore di connessione/SSL.\n";
-        echo "   1. Verifica che il file cacert.pem esista nella cartella\n";
-        echo "   2. Controlla la connessione a Internet\n";
-        echo "   3. Prova a disabilitare temporaneamente firewall/antivirus\n";
+        echo "\n🌐 ERRORE: Connessione fallita\n";
+        echo "   Verifica:\n";
+        echo "   1. Connessione internet\n";
+        echo "   2. Firewall/antivirus non blocca cURL\n";
+        echo "   3. File cacert.pem presente per test locale\n";
+        
+    } else {
+        echo "\n⚠️  Codice HTTP non riconosciuto\n";
+        echo "   Controlla la console Firebase per altri errori\n";
     }
     exit(1);
 }
 
-// 6. Opzionale: pulisci file JSON dopo l'invio
-// unlink($file_json);
-// echo "\n🗑️ File JSON temporaneo cancellato.\n";
+// ============================================================================
+// 7. PULIZIA (OPZIONALE)
+// ============================================================================
+
+// Opzionale: cancella il file JSON dopo l'invio
+// if (file_exists($file_json)) {
+//     unlink($file_json);
+//     echo "🗑️  File JSON temporaneo eliminato\n";
+// }
 
 echo "\n=== OPERAZIONE COMPLETATA CON SUCCESSO ===\n";
 ?>

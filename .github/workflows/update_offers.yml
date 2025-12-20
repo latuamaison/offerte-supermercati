@@ -4,6 +4,8 @@ on:
   schedule:
     - cron: '0 */4 * * *'  # Ogni 4 ore: 00:00, 04:00, 08:00, 12:00, 16:00, 20:00 UTC
   workflow_dispatch:        # Esecuzione manuale
+  push:
+    branches: [ main ]     # Avvia anche con un push su main (opzionale, per test)
 
 jobs:
   update-offers:
@@ -11,41 +13,86 @@ jobs:
     timeout-minutes: 30
     
     steps:
+    # 1. SCARICA IL CODICE
     - name: Checkout repository
       uses: actions/checkout@v4
-    
+
+    # 2. CONFIGURA PYTHON
     - name: Setup Python 3.11
       uses: actions/setup-python@v5
       with:
         python-version: '3.11'
-    
+        # Aggiunge la cache per pip per velocizzare le esecuzioni successive
+        cache: 'pip'
+
+    # 3. INSTALLA DIPENDENZE PYTHON (VERSIONI AGGIORNATE)
     - name: Install Python dependencies
       run: |
-        pip install selenium==4.15.2
-        pip install webdriver-manager==4.0.1
-        pip install requests==2.31.0
-        pip install beautifulsoup4==4.12.2
-        pip install lxml==4.9.3
-    
+        python -m pip install --upgrade pip
+        # Installa le versioni più recenti e compatibili
+        pip install selenium==4.*
+        pip install webdriver-manager==4.*
+        pip install requests==2.*
+        pip install beautifulsoup4==4.*
+        pip install lxml==4.*
+        # Verifica dell'installazione
+        python -c "import selenium; print(f'✅ Selenium v{selenium.__version__}')"
+
+    # 4. INSTALLA CHROME E CHROMEDRIVER (METODO AFFIDABILE)
     - name: Install Chrome for Selenium
       run: |
         sudo apt-get update
-        sudo apt-get install -y wget
-        wget -q -O /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
-        sudo apt-get install -y /tmp/chrome.deb
+        # Installa Chrome dalla repository ufficiale Google (più stabile)
+        wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
+        echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list
+        sudo apt-get update
+        sudo apt-get install -y google-chrome-stable
         echo "Chrome version:"
-        google-chrome --version
-    
-    - name: Install PHP and cURL
+        google-chrome --version 2>&1 | head -1
+
+    # 5. INSTALLA PHP E DIPENDENZE NECESSARIE
+    - name: Install PHP and extensions
       run: |
         sudo apt-get update
-        sudo apt-get install -y php php-curl
+        # Installa PHP 8.1 (versione LTS stabile) e l'estensione cURL
+        sudo apt-get install -y php8.1 php8.1-curl
         echo "PHP version:"
         php --version
-    
+
+    # 6. ESEGUI LO SCRIPT CON CONTROLLO ERRORI
     - name: Run Eurospin Update Script
       env:
+        # IL SEGRETO PIÙ IMPORTANTE: deve corrispondere a quello su GitHub Secrets
         FIREBASE_SECRET: ${{ secrets.FIREBASE_SECRET }}
       run: |
-        echo "🚀 Starting Eurospin update automation..."
+        echo "🚀 Avvio automazione Eurospin..."
+
+        # Esegui lo script PHP principale
         php trigger_eurospin.php
+        EXIT_CODE=$?
+
+        # Controlla se l'esecuzione ha avuto successo
+        if [ $EXIT_CODE -eq 0 ]; then
+          echo "✅ Script completato con successo."
+          # Opzionale: mostra statistiche del file generato
+          if [ -f "promozioni_eurospin.json" ]; then
+            echo "📊 File generato:"
+            ls -lh promozioni_eurospin.json
+          fi
+        else
+          echo "❌ Script fallito con codice di uscita: $EXIT_CODE"
+          # Forza un fallimento del workflow
+          exit $EXIT_CODE
+        fi
+
+    # 7. PASSO DI FALLBACK (opzionale, per debugging avanzato)
+    - name: Diagnostic Log (solo in caso di fallimento)
+      if: failure() # Questo passo viene eseguito solo se il job fallisce
+      run: |
+        echo "🔍 AVVIO DIAGNOSTICA POST-FALLIMENTO"
+        echo "--- Contenuto della directory ---"
+        ls -la
+        echo "--- Controllo versione ChromeDriver ---"
+        python -c "from webdriver_manager.chrome import ChromeDriverManager; print(ChromeDriverManager().install())" || true
+        echo "--- Test connessione generica ---"
+        curl -I https://www.eurospin.it 2>/dev/null | head -1 || echo "Connessione al sito fallita"

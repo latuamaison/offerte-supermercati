@@ -22,13 +22,12 @@ jobs:
       uses: actions/setup-python@v5
       with:
         python-version: '3.11'
-        cache: 'pip'  # Cache per velocizzare le esecuzioni successive
+        cache: 'pip'
 
     # 3. INSTALLA DIPENDENZE PYTHON - VERSIONI SPECIFICHE TESTATE
     - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip setuptools wheel
-        # Versioni TESTATE per Ubuntu 24.04 + Chrome 120+
         pip install selenium==4.39.0
         pip install webdriver-manager==4.0.1
         pip install requests==2.31.0
@@ -36,16 +35,15 @@ jobs:
         pip install lxml==4.9.3
         pip install python-dotenv==1.0.0
         
-        # Verifica installazione
         python -c "import selenium; print(f'✅ Selenium v{selenium.__version__}')"
         python -c "from webdriver_manager.chrome import ChromeDriverManager; print('✅ WebDriver Manager pronto')"
 
-    # 4. INSTALLA CHROME - METODO UFFICIALE GOOGLE (CORRETTO per Ubuntu 24.04)
+    # 4. INSTALLA CHROME - METODO UFFICIALE GOOGLE (FORMATTATO CORRETTAMENTE)
     - name: Install Chrome and dependencies
       run: |
         sudo apt-get update
         # Installa dipendenze necessarie per Ubuntu 24.04
-        # NOTA: libasound2 è stato sostituito da libasound2t64 in Ubuntu 24.04
+        # ATTENZIONE: YAML richiede indentazione precisa. Ogni riga deve iniziare esattamente con 10 spazi dopo il backslash
         sudo apt-get install -y \
           wget \
           unzip \
@@ -53,7 +51,7 @@ jobs:
           libappindicator3-1 \
           libindicator7 \
           fonts-liberation \
-          libasound2t64 \        # <-- CORREZIONE QUI: libasound2 → libasound2t64
+          libasound2t64 \
           libnspr4 \
           libnss3 \
           libx11-xcb1 \
@@ -64,11 +62,9 @@ jobs:
           libxtst6 \
           xdg-utils
         
-        # Installa Google Chrome STABLE
         wget -q -O /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
         sudo apt-get install -y /tmp/chrome.deb
         rm /tmp/chrome.deb
-        
         echo "✅ Chrome installato:"
         google-chrome --version 2>&1 | head -1
 
@@ -76,7 +72,6 @@ jobs:
     - name: Install PHP for Ubuntu 24.04
       run: |
         sudo apt-get update
-        # Ubuntu 24.04 ha PHP 8.3 di default
         sudo apt-get install -y \
           php \
           php-curl \
@@ -95,16 +90,13 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y xvfb
-        # Avvia Xvfb in background (necessario per Chrome headless su server)
         Xvfb :99 -screen 0 1920x1080x24 > /dev/null 2>&1 &
         echo "✅ Xvfb avviato su DISPLAY=:99"
 
     # 7. ESEGUI LO SCRIPT CON DIAGNOSTICA DETTAGLIATA
     - name: Run Eurospin Update Automation
       env:
-        # SEGRETO CRITICO - Deve corrispondere al segreto GitHub
         FIREBASE_SECRET: ${{ secrets.FIREBASE_SECRET }}
-        # Variabili per debugging e compatibilità
         PYTHONUNBUFFERED: 1
         DISPLAY: ":99"
       run: |
@@ -112,28 +104,23 @@ jobs:
         echo "🚀 AVVIO AUTOMAZIONE EUROSPIN"
         echo "========================================"
         
-        # Verifica ambiente
         echo "📋 VERIFICA AMBIENTE:"
         echo "Python:" $(python --version)
         echo "PHP:" $(php --version | head -1)
         echo "Chrome:" $(google-chrome --version 2>&1 | head -1)
         
-        # Controllo file essenziali
         echo "📁 FILE ESSENZIALI:"
         ls -la trigger_eurospin.php estrai_eurospin.py requirements.txt 2>/dev/null || echo "⚠️  File mancanti!"
         
-        # Esegui lo script PHP principale
         echo "▶️  ESECUZIONE SCRIPT PRINCIPALE..."
         php trigger_eurospin.php
         EXIT_CODE=$?
         
-        # Analisi risultato
         if [ $EXIT_CODE -eq 0 ]; then
           echo "========================================"
           echo "✅ SCRIPT COMPLETATO CON SUCCESSO!"
           echo "========================================"
           
-          # Statistiche file generato
           if [ -f "promozioni_eurospin.json" ]; then
             echo "📊 STATISTICHE:"
             echo "Dimensione:" $(ls -lh promozioni_eurospin.json | awk '{print $5}')
@@ -148,24 +135,21 @@ jobs:
           echo "❌ SCRIPT FALLITO - CODICE: $EXIT_CODE"
           echo "========================================"
           
-          # Diagnostica immediata
           echo "🔍 DIAGNOSTICA RAPIDA:"
           
-          # Controlla se il file JSON è stato creato
           if [ -f "promozioni_eurospin.json" ]; then
             echo "⚠️  File JSON creato ma errore nell'invio Firebase"
             echo "Ultime righe del file:"
             tail -5 promozioni_eurospin.json
           fi
           
-          # Controlla errori Python
           if [ -f "promozioni_eurospin.json" ]; then
             echo "✅ Estrazione Python riuscita"
           else
             echo "❌ Estrazione Python fallita"
           fi
           
-          exit $EXIT_CODE  # Propaga l'errore
+          exit $EXIT_CODE
         fi
 
     # 8. DIAGNOSTICA AVANZATA (solo se fallisce)
@@ -183,8 +167,6 @@ jobs:
             from selenium.webdriver.chrome.service import Service
             from selenium.webdriver.chrome.options import Options
             print('✅ WebDriver Manager: OK')
-            
-            # Test configurazione Chrome
             options = Options()
             options.add_argument('--headless')
             options.add_argument('--no-sandbox')
@@ -194,7 +176,6 @@ jobs:
         " 2>/dev/null || echo "⚠️  Errore test ChromeDriver"
         
         echo "2. VERIFICA FIREBASE CONNECTION:"
-        # Test connessione Firebase (solo lettura)
         curl -s -o /dev/null -w "%{http_code}" \
           "https://offerte-spesa-default-rtdb.europe-west1.firebasedatabase.app/.json" \
           && echo "✅ Firebase raggiungibile" || echo "⚠️  Firebase non raggiungibile"

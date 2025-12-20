@@ -1,4 +1,4 @@
-# estrai_eurospin.py - Versione universale (Windows + Linux/GitHub)
+# estrai_eurospin.py - Versione universale (Windows + Linux/GitHub) FIXED
 import time, json, sys, os, platform
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -14,9 +14,9 @@ SCROLL_PAUSE = 1.5
 CATEGORY_WAIT_SECONDS = 2
 DELAY_BETWEEN_CATEGORIES = 3
 
-def main():
-    print("Avvio estrazione Eurospin...")
-    print(f"Sistema operativo: {platform.system()}")
+def setup_driver():
+    """Configura ChromeDriver automaticamente per Windows e Linux"""
+    print("   Configurazione ChromeDriver...")
     
     # Configura Chrome
     chrome_options = Options()
@@ -26,23 +26,67 @@ def main():
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--window-size=1920,1080")
+    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    chrome_options.add_experimental_option('useAutomationExtension', False)
     
-    # Configurazione per ambiente
+    # User agent realistico
     if platform.system() == "Windows":
-        # Windows: usa chromedriver.exe locale
-        driver_path = os.path.join(os.getcwd(), 'chromedriver.exe')
-        service = Service(driver_path)
-        driver = webdriver.Chrome(service=service, options=chrome_options)
+        chrome_options.add_argument('user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
     else:
-        # Linux (GitHub Actions): usa ChromeDriverManager
-        try:
-            from webdriver_manager.chrome import ChromeDriverManager
-            from selenium.webdriver.chrome.service import Service as ChromeService
-            service = ChromeService(ChromeDriverManager().install())
-            driver = webdriver.Chrome(service=service, options=chrome_options)
-        except ImportError:
-            print("ERRORE: webdriver-manager non installato. Usa 'pip install webdriver-manager'")
-            return False
+        chrome_options.add_argument('user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36')
+    
+    try:
+        # TENTATIVO 1: Usa webdriver-manager per entrambi i sistemi
+        from webdriver_manager.chrome import ChromeDriverManager
+        from selenium.webdriver.chrome.service import Service as ChromeService
+        
+        print("   Usando webdriver-manager (ChromeDriver automatico)...")
+        service = ChromeService(ChromeDriverManager().install())
+        driver = webdriver.Chrome(service=service, options=chrome_options)
+        return driver
+        
+    except ImportError:
+        print("   ⚠️  webdriver-manager non installato. Installalo con: pip install webdriver-manager")
+        
+    except Exception as e:
+        print(f"   ⚠️  Errore webdriver-manager: {str(e)[:100]}")
+    
+    # TENTATIVO 2: Fallback per Windows (chromedriver.exe locale)
+    try:
+        if platform.system() == "Windows":
+            print("   Tentativo fallback Windows...")
+            driver_path = os.path.join(os.getcwd(), 'chromedriver.exe')
+            if os.path.exists(driver_path):
+                service = Service(driver_path)
+                driver = webdriver.Chrome(service=service, options=chrome_options)
+                return driver
+            else:
+                print("   ❌ chromedriver.exe non trovato nella cartella")
+    except Exception as e:
+        print(f"   ⚠️  Errore fallback Windows: {str(e)[:100]}")
+    
+    # TENTATIVO 3: ChromeDriver nella PATH di sistema
+    try:
+        print("   Tentativo ChromeDriver system PATH...")
+        driver = webdriver.Chrome(options=chrome_options)
+        return driver
+    except Exception as e:
+        print(f"   ❌ Tutti i metodi falliti: {str(e)[:100]}")
+        return None
+
+def main():
+    print("Avvio estrazione Eurospin...")
+    print(f"Sistema operativo: {platform.system()}")
+    
+    # Setup driver
+    driver = setup_driver()
+    if not driver:
+        print("❌ Impossibile configurare ChromeDriver")
+        print("   Soluzioni:")
+        print("   1. Installa webdriver-manager: pip install webdriver-manager")
+        print("   2. Scarica chromedriver.exe e mettilo in questa cartella")
+        return False
     
     try:
         driver.get(BASE_URL)
@@ -154,6 +198,8 @@ def main():
         
     except Exception as e:
         print(f"Errore durante l'estrazione: {e}")
+        import traceback
+        traceback.print_exc()
         return False
     finally:
         driver.quit()

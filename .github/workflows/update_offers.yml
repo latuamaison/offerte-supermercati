@@ -40,11 +40,12 @@ jobs:
         python -c "import selenium; print(f'✅ Selenium v{selenium.__version__}')"
         python -c "from webdriver_manager.chrome import ChromeDriverManager; print('✅ WebDriver Manager pronto')"
 
-    # 4. INSTALLA CHROME - METODO UFFICIALE GOOGLE
+    # 4. INSTALLA CHROME - METODO UFFICIALE GOOGLE (CORRETTO per Ubuntu 24.04)
     - name: Install Chrome and dependencies
       run: |
         sudo apt-get update
-        # Installa dipendenze necessarie
+        # Installa dipendenze necessarie per Ubuntu 24.04
+        # NOTA: libasound2 è stato sostituito da libasound2t64 in Ubuntu 24.04
         sudo apt-get install -y \
           wget \
           unzip \
@@ -52,7 +53,7 @@ jobs:
           libappindicator3-1 \
           libindicator7 \
           fonts-liberation \
-          libasound2 \
+          libasound2t64 \        # <-- CORREZIONE QUI: libasound2 → libasound2t64
           libnspr4 \
           libnss3 \
           libx11-xcb1 \
